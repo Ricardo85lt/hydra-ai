@@ -48,11 +48,11 @@ app.use(express.json());
 const apiKey = process.env.GEMINI_API_KEY;
 let ai: GoogleGenAI | null = null;
 
-if (apiKey) {
+if (apiKey && apiKey.trim() !== '' && apiKey !== 'undefined' && apiKey !== 'null') {
   ai = new GoogleGenAI({ apiKey });
   console.log('[HYDRA AI] GoogleGenAI client initialized successfully.');
 } else {
-  console.warn('[HYDRA AI] WARN: GEMINI_API_KEY is not set. AI endpoints will use the fallback algorithm.');
+  console.warn('[HYDRA AI] WARN: GEMINI_API_KEY is not configured or is empty. AI endpoints will use the local fallback algorithm.');
 }
 
 // ── Guard: Responde 503 con mensaje descriptivo si el cliente AI no está configurado
@@ -136,12 +136,21 @@ app.post('/api/gemini/chat', async (req, res) => {
     res.json({ text: response.text });
 
   } catch (err: any) {
-    // ── FIX 6: console.error con detalle completo para diagnóstico en Render logs
-    console.error('[HYDRA AI] ERROR in /api/gemini/chat:', err?.message || err);
+    const statusCode = err?.status || err?.statusCode || err?.response?.status || 500;
+    const errorMsg = err?.message || 'Error desconocido';
+    const errorDetails = err?.errorDetails || err?.details || null;
+
+    console.error(`[HYDRA AI] ERROR in /api/gemini/chat (HTTP ${statusCode}):`, errorMsg);
+    if (errorDetails) {
+      console.error('[HYDRA AI] Error Details:', JSON.stringify(errorDetails, null, 2));
+    }
     console.error('[HYDRA AI] Stack:', err?.stack);
-    res.status(500).json({
+
+    res.status(statusCode).json({
       error: 'Error al consultar la IA de Gemini. Revisa los logs del servidor para más detalles.',
-      detail: err?.message || 'Error desconocido',
+      detail: errorMsg,
+      status: statusCode,
+      details: errorDetails
     });
   }
 });
@@ -308,13 +317,18 @@ app.post('/api/gemini/analyze', async (req, res) => {
     });
 
   } catch (err: any) {
-    // ── FIX 5: HTTP 500 en catch (antes era 200, dificultaba el diagnóstico)
-    // ── FIX 6: console.error con detalle completo
-    console.error('[HYDRA AI] ERROR in /api/gemini/analyze (Gemini call):', err?.message || err);
+    const statusCode = err?.status || err?.statusCode || err?.response?.status || 500;
+    const errorMsg = err?.message || 'Error desconocido';
+    const errorDetails = err?.errorDetails || err?.details || null;
+
+    console.error(`[HYDRA AI] ERROR in /api/gemini/analyze (HTTP ${statusCode}):`, errorMsg);
+    if (errorDetails) {
+      console.error('[HYDRA AI] Error Details:', JSON.stringify(errorDetails, null, 2));
+    }
     console.error('[HYDRA AI] Stack:', err?.stack);
 
     // Aunque falle Gemini, devolvemos el cómputo matemático con HTTP 200
-    // pero logueamos el error 500 internamente para Render
+    // pero incluimos el código de error para diagnóstico del frontend
     res.status(200).json({
       recommendation,
       confidence,
@@ -324,7 +338,7 @@ app.post('/api/gemini/analyze', async (req, res) => {
       savings_percentage: savings_pct,
       risk_evaluation: risk,
       ai_analysis:
-        `[Análisis Híbrido — Gemini temporalmente no disponible] ` +
+        `[Análisis Híbrido — Gemini temporalmente no disponible (HTTP ${statusCode})] ` +
         `Decisión calculada localmente: ${recommendation}. ` +
         `${fallbackReason}. El motor matemático garantiza la continuidad operativa del sistema de riego.`,
     });
@@ -354,11 +368,30 @@ async function startServer() {
     });
   }
 
+  // Prueba de diagnóstico en inicio para verificar credenciales y cuota de Gemini en los logs de Render
+  if (ai) {
+    try {
+      console.log('[HYDRA AI] Probando conexión de inicio con la API de Gemini...');
+      const testRes = await ai.models.generateContent({
+        model: 'gemini-2.0-flash-lite',
+        contents: 'Test connection',
+      });
+      console.log('[HYDRA AI] ✅ Diagnóstico inicial exitoso. Gemini responde correctamente.');
+    } catch (testErr: any) {
+      const testCode = testErr?.status || testErr?.statusCode || testErr?.response?.status || 500;
+      console.error(`[HYDRA AI] ❌ FALLO DE DIAGNÓSTICO EN INICIO (HTTP ${testCode}):`, testErr?.message || testErr);
+      if (testErr?.errorDetails || testErr?.details) {
+        console.error('[HYDRA AI] Detalles del fallo:', JSON.stringify(testErr?.errorDetails || testErr?.details, null, 2));
+      }
+      console.warn('[HYDRA AI] La aplicación iniciará, pero las funciones de Gemini usarán el motor local de contingencia.');
+    }
+  }
+
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`\n╔══════════════════════════════════════════════════╗`);
     console.log(`║  HYDRA AI Server — ${new Date().toISOString()}  ║`);
     console.log(`║  Listening on http://0.0.0.0:${PORT}               ║`);
-    console.log(`║  AI Engine: ${ai ? 'ONLINE (Gemini 2.0 Flash Lite)' : 'OFFLINE (Fallback Local)'}`);
+    console.log(`║  AI Engine: ${ai ? 'ONLINE (Gemini 2.0-flash-lite)' : 'OFFLINE (Fallback Local)'}`);
     console.log(`╚══════════════════════════════════════════════════╝\n`);
   });
 }
