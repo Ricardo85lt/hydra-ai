@@ -1,0 +1,75 @@
+@import "tailwindcss";
+
+:root {
+  /* Dark Mode values (Default) - Control room style */
+  --bg-primary: #020b14;
+  --bg-secondary: #0d1f35;
+  --bg-tertiary: #031122;
+  --bg-hover: #081524;
+  --bg-header-footer: #102744;
+  --border-primary: #1a3a5c;
+  --border-secondary: rgba(26, 58, 92, 0.6);
+  --text-primary: #d6eeff;
+  --text-muted: #6fa8d4;
+  --text-muted-dark: #3a6b99;
+  
+  --accent-cyan: #00ffd5;
+  --accent-blue: #00aaff;
+  --accent-yellow: #ffe066;
+  --accent-red: #ff4d6d;
+}
+
+:root[data-theme="light"] {
+  /* Light Mode values - Industrial agriculture style */
+  --bg-primary: #f3f5f8;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #e2e8f0;
+  --bg-hover: #cbd5e1;
+  --bg-header-footer: #f8fafc;
+  --border-primary: #cbd5e1;
+  --border-secondary: rgba(203, 213, 225, 0.6);
+  --text-primary: #0f172a;
+  --text-muted: #475569;
+  --text-muted-dark: #64748b;
+  
+  --accent-cyan: #059669; /* Rich agricultural green */
+  --accent-blue: #1d4ed8; /* Deep water blue */
+  --accent-yellow: #d97706; /* Industrial amber/yellow */
+  --accent-red: #dc2626; /* Hazard/Warning red */
+}
+
+@theme {
+  --color-bg-primary: var(--bg-primary);
+  --color-bg-secondary: var(--bg-secondary);
+  --color-bg-tertiary: var(--bg-tertiary);
+  --color-bg-hover: var(--bg-hover);
+  --color-bg-header-footer: var(--bg-header-footer);
+  
+  --color-border-primary: var(--border-primary);
+  --color-border-secondary: var(--border-secondary);
+  
+  --color-text-primary: var(--text-primary);
+  --color-text-muted: var(--text-muted);
+  --color-text-muted-dark: var(--text-muted-dark);
+  
+  --color-accent-cyan: var(--accent-cyan);
+  --color-accent-blue: var(--accent-blue);
+  --color-accent-yellow: var(--accent-yellow);
+  --color-accent-red: var(--accent-red);
+}
+
+/* Base style resets */
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+/* Custom styles for animations or scrolls if needed */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

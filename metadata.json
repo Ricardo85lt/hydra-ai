@@ -1,0 +1,6 @@
+{
+  "name": "HYDRA AI",
+  "description": "Sistema de riego inteligente y optimización de tareas hídricas, energéticas y climáticas para el sector agroindustrial en Santa Cruz, Bolivia.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
