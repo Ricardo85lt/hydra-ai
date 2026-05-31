@@ -43,29 +43,76 @@ app.use((req, res, next) => {
 // Body parsing
 app.use(express.json());
 
-// ── FIX 2: Constructor limpio — httpOptions.headers NO está soportado en @google/genai v2
-// Solo se aceptan: apiKey, httpOptions.baseUrl, httpOptions.apiVersion, httpOptions.timeout
-const apiKey = process.env.GEMINI_API_KEY;
-let ai: GoogleGenAI | null = null;
+const groqApiKey = process.env.GROQ_API_KEY;
+const geminiApiKey = process.env.GEMINI_API_KEY;
 
-if (apiKey && apiKey.trim() !== '' && apiKey !== 'undefined' && apiKey !== 'null') {
-  ai = new GoogleGenAI({ apiKey });
-  console.log('[HYDRA AI] GoogleGenAI client initialized successfully.');
+let activeEngine: 'groq' | 'gemini' | 'local' = 'local';
+let aiClient: GoogleGenAI | null = null;
+
+if (groqApiKey && groqApiKey.trim() !== '' && groqApiKey !== 'undefined' && groqApiKey !== 'null') {
+  activeEngine = 'groq';
+  console.log('[HYDRA AI] AI Engine configured to: GROQ (Llama 3)');
+} else if (geminiApiKey && geminiApiKey.trim() !== '' && geminiApiKey !== 'undefined' && geminiApiKey !== 'null') {
+  activeEngine = 'gemini';
+  aiClient = new GoogleGenAI({ apiKey: geminiApiKey });
+  console.log('[HYDRA AI] AI Engine configured to: GEMINI (Google GenAI)');
 } else {
-  console.warn('[HYDRA AI] WARN: GEMINI_API_KEY is not configured or is empty. AI endpoints will use the local fallback algorithm.');
+  console.warn('[HYDRA AI] WARN: No AI API keys configured. AI endpoints will use local fallback.');
 }
 
 // ── Guard: Responde 503 con mensaje descriptivo si el cliente AI no está configurado
 function checkAiClient(res: express.Response): boolean {
-  if (!ai) {
+  if (activeEngine === 'local') {
     res.status(503).json({
       error:
         'El servicio AI no está configurado en este entorno. ' +
-        'Define la variable de entorno GEMINI_API_KEY en el panel de configuración de Render.',
+        'Define la variable de entorno GROQ_API_KEY o GEMINI_API_KEY en el panel de configuración de Render.',
     });
     return false;
   }
   return true;
+}
+
+// ── Helper centralizado para consultar LLM (Groq / Gemini)
+async function queryLLM(systemInstruction: string, prompt: string): Promise<string> {
+  if (activeEngine === 'groq') {
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${groqApiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        messages: [
+          { role: 'system', content: systemInstruction },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.5,
+        max_tokens: 500,
+      }),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      let status = res.status;
+      throw Object.assign(new Error(errText), { status });
+    }
+
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content || '';
+  } else if (activeEngine === 'gemini') {
+    const response = await aiClient!.models.generateContent({
+      model: 'gemini-2.0-flash-lite',
+      contents: prompt,
+      config: {
+        systemInstruction: systemInstruction,
+      },
+    });
+    return response.text || '';
+  } else {
+    throw new Error('No AI Engine available');
+  }
 }
 
 // ────────────────────────────────────────────
@@ -77,8 +124,9 @@ app.get('/api/health', (_req, res) => {
   res.json({
     status: 'ok',
     time: new Date().toISOString(),
-    ai_configured: !!ai,
-    model: 'gemini-2.0-flash-lite',
+    ai_configured: activeEngine !== 'local',
+    active_engine: activeEngine,
+    model: activeEngine === 'groq' ? 'llama-3.3-70b-versatile' : 'gemini-2.0-flash-lite',
     port: PORT,
   });
 });
@@ -110,30 +158,23 @@ app.post('/api/gemini/chat', async (req, res) => {
         .join('\n')
     : 'Información de zonas no disponible.';
 
-  // ── FIX 1: Modelo corregido a 'gemini-2.0-flash'
-  // ── FIX 3: systemInstruction correctamente ubicado dentro de config{}
   try {
-    const response = await ai!.models.generateContent({
-      model: 'gemini-2.0-flash-lite',
-      contents: message,
-      config: {
-        systemInstruction:
-          `Eres HYDRA AI, un asesor agrónomo experto y preciso en riego automatizado para la región agropecuaria de Santa Cruz, Bolivia ` +
-          `(específicamente Montero, Minero, Portachuelo y Okinawa). ` +
-          `\n\nTIENES ACCESO A LA TELEMETRÍA EN TIEMPO REAL DEL PREDIO:\n` +
-          `- Sensores IoT actuales: ${formattedSensors}\n` +
-          `- Estado de zonas agrícolas:\n${formattedZones}\n\n` +
-          `TU OBJETIVO: Maximizar la eficiencia hídrica (conservar agua), optimizar el gasto energético ` +
-          `(aprovechar la tarifa "Valle" de CRE Bolivia de 22:00 a 06:00 y evitar la tarifa "Punta" de 18:00 a 21:00) ` +
-          `y garantizar la salud óptima de los cultivos (soya, caña de azúcar, girasol, maíz).\n\n` +
-          `INSTRUCCIONES DE RESPUESTA: Responde siempre en español. Sé breve, profesional, técnico y pragmático. ` +
-          `Máximo 4 oraciones. Menciona cifras concretas de ahorro cuando sea relevante.`,
-      },
-    });
+    const systemInstruction =
+      `Eres HYDRA AI, un asesor agrónomo experto y preciso en riego automatizado para la región agropecuaria de Santa Cruz, Bolivia ` +
+      `(específicamente Montero, Minero, Portachuelo y Okinawa). ` +
+      `\n\nTIENES ACCESO A LA TELEMETRÍA EN TIEMPO REAL DEL PREDIO:\n` +
+      `- Sensores IoT actuales: ${formattedSensors}\n` +
+      `- Estado de zonas agrícolas:\n${formattedZones}\n\n` +
+      `TU OBJETIVO: Maximizar la eficiencia hídrica (conservar agua), optimizar el gasto energético ` +
+      `(aprovechar la tarifa "Valle" de CRE Bolivia de 22:00 a 06:00 y evitar la tarifa "Punta" de 18:00 a 21:00) ` +
+      `y garantizar la salud óptima de los cultivos (soya, caña de azúcar, girasol, maíz).\n\n` +
+      `INSTRUCCIONES DE RESPUESTA: Responde siempre en español. Sé breve, profesional, técnico y pragmático. ` +
+      `Máximo 4 oraciones. Menciona cifras concretas de ahorro cuando sea relevante.`;
 
-    // ── FIX 6: Log en consola para monitoreo en Render
-    console.log(`[HYDRA AI] /chat → OK | user: "${message.slice(0, 60)}..."`);
-    res.json({ text: response.text });
+    const text = await queryLLM(systemInstruction, message);
+
+    console.log(`[HYDRA AI] /chat → OK | engine: ${activeEngine} | user: "${message.slice(0, 60)}..."`);
+    res.json({ text });
 
   } catch (err: any) {
     const statusCode = err?.status || err?.statusCode || err?.response?.status || 500;
@@ -147,7 +188,7 @@ app.post('/api/gemini/chat', async (req, res) => {
     console.error('[HYDRA AI] Stack:', err?.stack);
 
     res.status(statusCode).json({
-      error: 'Error al consultar la IA de Gemini. Revisa los logs del servidor para más detalles.',
+      error: `Error al consultar la IA (${activeEngine}). Revisa los logs del servidor para más detalles.`,
       detail: errorMsg,
       status: statusCode,
       details: errorDetails
@@ -250,7 +291,7 @@ app.post('/api/gemini/analyze', async (req, res) => {
   const fallbackReason = reasons.join(' | ') || 'Sistema operando en estabilidad hídrica óptima.';
 
   // ── FIX 4: checkAiClient antes de intentar llamar al SDK
-  if (!ai) {
+  if (activeEngine === 'local') {
     console.log('[HYDRA AI] /analyze → Fallback algoritmo local (sin API Key)');
     res.json({
       recommendation,
@@ -261,18 +302,16 @@ app.post('/api/gemini/analyze', async (req, res) => {
       savings_percentage: savings_pct,
       risk_evaluation: risk,
       ai_analysis:
-        `[Algoritmo Híbrido Local] Decisión calculada autónomamente sin conexión a Gemini. ` +
+        `[Algoritmo Híbrido Local] Decisión calculada autónomamente sin conexión a IA. ` +
         `Factores determinantes: ${fallbackReason}. ` +
         `El sistema garantiza la optimización de riego y energía utilizando el motor de inferencia matemático integrado de Santa Cruz.`,
     });
     return;
   }
 
-  // ── Nutrimos el análisis con narrativa experta de Gemini
-  // ── FIX 1 + 3: modelo correcto y systemInstruction dentro de config
+  // ── Nutrimos el análisis con narrativa experta de IA
   try {
     const analysisPrompt =
-      `Eres el motor ejecutivo de decisiones HYDRA AI para Santa Cruz, Bolivia. Experto en agronomía y eficiencia hídrica.\n\n` +
       `El algoritmo híbrido matemático ha calculado los siguientes resultados operativos para el predio:\n` +
       `- Decisión de riego: "${recommendation}"\n` +
       `- Confianza del modelo: ${confidence}%\n` +
@@ -286,22 +325,18 @@ app.post('/api/gemini/analyze', async (req, res) => {
       `- Costo energético estimado: $${energy_cost.toFixed(4)} USD\n` +
       `- Ahorro vs riego manual convencional: ${savings_pct}%\n` +
       `- Nivel de riesgo agronómico: ${risk}\n` +
-      `- Factores determinantes del algoritmo: ${fallbackReason}\n\n` +
-      `Redacta un análisis ejecutivo breve (máximo 3 oraciones) en español para el productor agroindustrial. ` +
-      `Sé técnico, directo y menciona el ahorro económico o hídrico concreto. ` +
-      `No uses introducciones genéricas; ve directo a la decisión y su justificación.`;
+      `- Factores determinantes del algoritmo: ${fallbackReason}`;
 
-    const geminiResponse = await ai.models.generateContent({
-      model: 'gemini-2.0-flash-lite',
-      contents: analysisPrompt,
-      config: {
-        systemInstruction:
-          'Eres HYDRA AI, un sistema experto de optimización de riego y energía para el sector agroindustrial de Santa Cruz, Bolivia. ' +
-          'Tus respuestas deben ser técnicas, concisas y orientadas al ahorro de recursos hídricos y energéticos.',
-      },
-    });
+    const systemInstruction =
+      'Eres el motor ejecutivo de decisiones HYDRA AI para Santa Cruz, Bolivia. Experto en agronomía y eficiencia hídrica. ' +
+      'Tus respuestas deben ser técnicas, concisas y orientadas al ahorro de recursos hídricos y energéticos. ' +
+      'Redacta un análisis ejecutivo breve (máximo 3 oraciones) en español para el productor agroindustrial. ' +
+      'Sé técnico, directo y menciona el ahorro económico o hídrico concreto. ' +
+      'No uses introducciones genéricas; ve directo a la decisión y su justificación.';
 
-    console.log(`[HYDRA AI] /analyze → OK | rec: ${recommendation} | conf: ${confidence}%`);
+    const aiAnalysisText = await queryLLM(systemInstruction, analysisPrompt);
+
+    console.log(`[HYDRA AI] /analyze → OK | engine: ${activeEngine} | rec: ${recommendation} | conf: ${confidence}%`);
 
     res.json({
       recommendation,
@@ -311,9 +346,7 @@ app.post('/api/gemini/analyze', async (req, res) => {
       cost_usd: energy_cost,
       savings_percentage: savings_pct,
       risk_evaluation: risk,
-      ai_analysis:
-        geminiResponse.text ||
-        `Análisis completado. Decisión: ${recommendation}. Motivo: ${fallbackReason}.`,
+      ai_analysis: aiAnalysisText,
     });
 
   } catch (err: any) {
@@ -327,8 +360,6 @@ app.post('/api/gemini/analyze', async (req, res) => {
     }
     console.error('[HYDRA AI] Stack:', err?.stack);
 
-    // Aunque falle Gemini, devolvemos el cómputo matemático con HTTP 200
-    // pero incluimos el código de error para diagnóstico del frontend
     res.status(200).json({
       recommendation,
       confidence,
@@ -338,7 +369,7 @@ app.post('/api/gemini/analyze', async (req, res) => {
       savings_percentage: savings_pct,
       risk_evaluation: risk,
       ai_analysis:
-        `[Análisis Híbrido — Gemini temporalmente no disponible (HTTP ${statusCode})] ` +
+        `[Análisis Híbrido — IA temporalmente no disponible (HTTP ${statusCode})] ` +
         `Decisión calculada localmente: ${recommendation}. ` +
         `${fallbackReason}. El motor matemático garantiza la continuidad operativa del sistema de riego.`,
     });
@@ -368,22 +399,22 @@ async function startServer() {
     });
   }
 
-  // Prueba de diagnóstico en inicio para verificar credenciales y cuota de Gemini en los logs de Render
-  if (ai) {
+  // Prueba de diagnóstico en inicio para verificar credenciales y cuota de IA en los logs de Render
+  if (activeEngine !== 'local') {
     try {
-      console.log('[HYDRA AI] Probando conexión de inicio con la API de Gemini...');
-      const testRes = await ai.models.generateContent({
-        model: 'gemini-2.0-flash-lite',
-        contents: 'Test connection',
-      });
-      console.log('[HYDRA AI] ✅ Diagnóstico inicial exitoso. Gemini responde correctamente.');
+      console.log(`[HYDRA AI] Probando conexión de inicio con el motor de IA (${activeEngine.toUpperCase()})...`);
+      const testRes = await queryLLM(
+        'Test connection system',
+        'Test connection'
+      );
+      console.log(`[HYDRA AI] ✅ Diagnóstico inicial exitoso. El motor ${activeEngine.toUpperCase()} responde correctamente.`);
     } catch (testErr: any) {
       const testCode = testErr?.status || testErr?.statusCode || testErr?.response?.status || 500;
       console.error(`[HYDRA AI] ❌ FALLO DE DIAGNÓSTICO EN INICIO (HTTP ${testCode}):`, testErr?.message || testErr);
       if (testErr?.errorDetails || testErr?.details) {
         console.error('[HYDRA AI] Detalles del fallo:', JSON.stringify(testErr?.errorDetails || testErr?.details, null, 2));
       }
-      console.warn('[HYDRA AI] La aplicación iniciará, pero las funciones de Gemini usarán el motor local de contingencia.');
+      console.warn(`[HYDRA AI] La aplicación iniciará, pero las funciones de IA usarán el motor local de contingencia.`);
     }
   }
 
@@ -391,7 +422,7 @@ async function startServer() {
     console.log(`\n╔══════════════════════════════════════════════════╗`);
     console.log(`║  HYDRA AI Server — ${new Date().toISOString()}  ║`);
     console.log(`║  Listening on http://0.0.0.0:${PORT}               ║`);
-    console.log(`║  AI Engine: ${ai ? 'ONLINE (Gemini 2.0-flash-lite)' : 'OFFLINE (Fallback Local)'}`);
+    console.log(`║  AI Engine: ${activeEngine.toUpperCase()} ${activeEngine === 'groq' ? '(Llama 3.3)' : activeEngine === 'gemini' ? '(Gemini 2.0)' : '(Fallback Local)'}`);
     console.log(`╚══════════════════════════════════════════════════╝\n`);
   });
 }
