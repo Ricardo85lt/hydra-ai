@@ -5,10 +5,7 @@ import { defineConfig } from 'vite';
 
 export default defineConfig(() => {
   return {
-    // ⚠️ REEMPLAZA 'nombre-de-tu-repositorio' con el nombre exacto en GitHub
-    // Recuerda mantener las barras diagonales al inicio y al final: /nombre/
-    base: '/HydraAI/',
-
+    // 🚀 Línea "base" eliminada para que Render funcione correctamente en la raíz
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
