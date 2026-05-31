@@ -21,6 +21,8 @@ interface AiChatTabProps {
   isAnalyzing: boolean;
   recalculateAIReport: () => void;
   chatBottomRef: React.RefObject<HTMLDivElement | null>;
+  aiStatus: 'online' | 'offline' | 'checking';
+  aiStatusMessage: string;
 }
 
 export const AiChatTab: React.FC<AiChatTabProps> = ({
@@ -32,7 +34,9 @@ export const AiChatTab: React.FC<AiChatTabProps> = ({
   aiAnalysisResult,
   isAnalyzing,
   recalculateAIReport,
-  chatBottomRef
+  chatBottomRef,
+  aiStatus,
+  aiStatusMessage
 }) => {
   return (
     <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
@@ -141,14 +145,35 @@ export const AiChatTab: React.FC<AiChatTabProps> = ({
             </div>
             <div>
               <h4 className="text-sm font-semibold text-text-primary">Asistente Agronómico Virtual</h4>
-              <p className="text-[10px] text-accent-cyan font-mono font-medium">Conversación en línea · Modelo Gemini 2.0 Flash</p>
+              <p className={`text-[10px] font-mono font-medium ${aiStatus === 'online' ? 'text-accent-cyan' : 'text-accent-red animate-pulse'}`}>
+                {aiStatusMessage}
+              </p>
             </div>
           </div>
-          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_#10b981] shrink-0" />
+          <span className={`w-2.5 h-2.5 rounded-full animate-pulse shrink-0 ${
+            aiStatus === 'online' 
+              ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]' 
+              : aiStatus === 'checking' 
+                ? 'bg-accent-yellow shadow-[0_0_8px_var(--accent-yellow)]' 
+                : 'bg-accent-red shadow-[0_0_8px_var(--accent-red)]'
+          }`} />
         </div>
 
         {/* Chat Stream Screen */}
         <div className="flex-1 p-6 overflow-y-auto space-y-4 bg-bg-tertiary">
+          {aiStatus !== 'online' && aiStatus !== 'checking' && (
+            <div className="bg-accent-red/10 border border-accent-red/20 text-accent-red p-3.5 rounded-xl text-xs flex flex-col gap-1 font-mono">
+              <span className="font-bold flex items-center gap-1.5">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-accent-red" />
+                SISTEMA OPERANDO EN CONTINGENCIA LOCAL
+              </span>
+              <p className="text-[11px] opacity-90 leading-normal">
+                No se pudo establecer conexión con la API de Gemini ({aiStatusMessage}).
+                El chat está utilizando el motor de respuestas precargadas del predio Montero.
+                Configura o actualiza la variable de entorno <b className="text-text-primary">GEMINI_API_KEY</b> en el panel de Render.
+              </p>
+            </div>
+          )}
           {chatMessages.map((msg, i) => (
             <div 
               key={i} 

@@ -71,12 +71,40 @@ export default function App() {
     ai_analysis: 'El suelo cuenta con humedad aceptable, pero la Zona Este requiere atención prioritaria. No se inicia riego masivo inmediato debido a que nos encontramos fuera de la tarifa optimizada (Valle). Se proyecta programar la siguiente tarea de riego inteligente a las 22:00 para aprovechar un ahorro del 58% en energía eléctrica, siempre que no se presenten lluvias precipitadas en las próximas horas.'
   });
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
+  const [aiStatus, setAiStatus] = useState<'online' | 'offline' | 'checking'>('checking');
+  const [aiStatusMessage, setAiStatusMessage] = useState<string>('Verificando conexión...');
 
   // Sync theme with document class/attributes and persist in localStorage
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('hydra_theme', theme);
   }, [theme]);
+
+  // Check AI health on boot and configure state
+  useEffect(() => {
+    const checkHealth = async () => {
+      try {
+        const res = await fetch('/api/health');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.ai_configured) {
+            setAiStatus('online');
+            setAiStatusMessage('Modelo Gemini 2.0 Flash');
+          } else {
+            setAiStatus('offline');
+            setAiStatusMessage('Sin clave API (Modo Contingencia)');
+          }
+        } else {
+          setAiStatus('offline');
+          setAiStatusMessage('Servidor no disponible');
+        }
+      } catch {
+        setAiStatus('offline');
+        setAiStatusMessage('Error de conexión');
+      }
+    };
+    checkHealth();
+  }, []);
 
   const toggleTheme = () => {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
@@ -350,6 +378,8 @@ export default function App() {
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         };
         setChatMessages(prev => [...prev, aiMsg]);
+        setAiStatus('online');
+        setAiStatusMessage('Modelo Gemini 2.0 Flash');
       } else {
         // Extraer el código de estado HTTP para decidir si usar fallback silencioso
         const status = response.status;
@@ -360,9 +390,26 @@ export default function App() {
         } catch {
           // No JSON body
         }
+        
+        if (status === 429) {
+          setAiStatus('offline');
+          setAiStatusMessage('Límite de cuota excedido (HTTP 429)');
+        } else if (status === 401 || status === 403) {
+          setAiStatus('offline');
+          setAiStatusMessage('Error de autenticación (HTTP 401/403)');
+        } else {
+          setAiStatus('offline');
+          setAiStatusMessage(`Error en el servidor de IA (HTTP ${status})`);
+        }
+
         throw Object.assign(new Error(detail), { httpStatus: status });
       }
     } catch (err: any) {
+      const errorDetail = err?.message || 'Error de conexión';
+      const errorStatus = err?.httpStatus ? ` (HTTP ${err.httpStatus})` : '';
+      
+      showToast(`Aviso: Operando en modo de contingencia local${errorStatus}`);
+
       setTimeout(() => {
         const fallbackText = getFailsafeChatResponse(promptToSend);
         const aiMsg: ChatMessage = {
@@ -528,6 +575,8 @@ El motor inteligente desvía de forma automática la carga para reducir el consu
               isAnalyzing={isAnalyzing}
               recalculateAIReport={() => recalculateAIReport(false)}
               chatBottomRef={chatBottomRef}
+              aiStatus={aiStatus}
+              aiStatusMessage={aiStatusMessage}
             />
           )}
 
