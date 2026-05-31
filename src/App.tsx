@@ -351,14 +351,24 @@ export default function App() {
         };
         setChatMessages(prev => [...prev, aiMsg]);
       } else {
-        throw new Error();
+        let errorMsg = 'Error en el servidor de IA';
+        let detail = '';
+        try {
+          const errData = await response.json();
+          errorMsg = errData.error || errorMsg;
+          detail = errData.detail || '';
+        } catch {
+          // No JSON body
+        }
+        throw new Error(detail ? `${errorMsg} (${detail})` : errorMsg);
       }
-    } catch {
+    } catch (err: any) {
       setTimeout(() => {
+        const errorDetail = err.message || 'Error de conexión con el servidor';
         const fallbackText = getFailsafeChatResponse(promptToSend);
         const aiMsg: ChatMessage = {
           sender: 'ai',
-          text: fallbackText,
+          text: `⚠️ [MODO DE CONTINGENCIA - MOTOR LOCAL]\nMotivo: ${errorDetail}\n\n${fallbackText}`,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         };
         setChatMessages(prev => [...prev, aiMsg]);

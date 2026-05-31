@@ -1,5 +1,5 @@
 import React from 'react';
-import { Compass, Settings } from 'lucide-react';
+import { Compass } from 'lucide-react';
 import { IrrigationZone } from '../types';
 
 interface AgroMapProps {
@@ -55,7 +55,7 @@ export const AgroMap: React.FC<AgroMapProps> = ({ zones, startManualIrrigation, 
           <path 
             d="M 30 10 Q 75 55 95 95 Q 125 145 115 195 Q 105 235 135 285 Q 155 315 175 330" 
             fill="none" 
-            stroke="rgba(0,ffd5,213,0.08)" 
+            stroke="rgba(0,255,213,0.08)" 
             strokeWidth="12" 
             strokeLinecap="round" 
           />
@@ -114,15 +114,15 @@ export const AgroMap: React.FC<AgroMapProps> = ({ zones, startManualIrrigation, 
               strokeWidth="1.5"
               className="transition-all duration-300"
             />
-            <rect 
-              x="370" y="35" width="110" height="75" rx="6" 
-              fill="none" 
-              stroke="#ff4d6d" 
-              strokeWidth="3" 
-              opacity="0.3" 
-              className="animate-ping" 
-              style={{ transformOrigin: '425px 72px' }}
-            />
+            {zones[2]?.status !== 'watering' && (
+              <rect 
+                x="370" y="35" width="110" height="75" rx="6" 
+                fill="none" 
+                stroke="#ff4d6d" 
+                strokeWidth="2" 
+                className="animate-pulse" 
+              />
+            )}
             <text x="425" y="70" textAnchor="middle" fill="#ff4d6d" fontFamily="monospace" fontSize="9" fontWeight="bold">ZONA ESTE</text>
             <text x="425" y="85" textAnchor="middle" fill="rgba(250,150,150,0.7)" fontFamily="monospace" fontSize="7">60 ha · Soya (En Alerta)</text>
           </g>
@@ -147,12 +147,27 @@ export const AgroMap: React.FC<AgroMapProps> = ({ zones, startManualIrrigation, 
           </g>
 
           {/* Central pump engine - interactive rotating cogwheel instead of emoji */}
-          <g id="central-pump" className="transition-transform duration-300 transform active:scale-95" transform="translate(255,175)">
+          <g 
+            id="central-pump" 
+            className="transition-transform duration-300 transform active:scale-95 cursor-pointer" 
+            transform="translate(255,175)"
+            onClick={() => showToast("Bomba central activa. Presión de flujo: 4.2 bar.")}
+          >
             <circle r="18" fill="rgba(2,11,26,0.9)" stroke="#00aaff" strokeWidth="2.5" />
             <circle r="26" fill="none" stroke="#00ffd5" strokeWidth="1.5" opacity="0.3" className="animate-ping" />
-            <foreignObject x="-8" y="-8" width="16" height="16">
-              <Settings className="w-4 h-4 text-accent-cyan animate-spin" style={{ animationDuration: '6s' }} />
-            </foreignObject>
+            <g className="animate-spin" style={{ animationDuration: '8s', transformOrigin: '0px 0px' }}>
+              <g transform="scale(0.6667) translate(-12, -12)">
+                <path 
+                  d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"
+                  fill="none" 
+                  stroke="#00ffd5" 
+                  strokeWidth="2" 
+                  strokeLinecap="round" 
+                  strokeLinejoin="round" 
+                />
+                <circle cx="12" cy="12" r="3" fill="none" stroke="#00ffd5" strokeWidth="2" />
+              </g>
+            </g>
             <text x="0" y="32" textAnchor="middle" fill="#6fa8d4" fontFamily="monospace" fontSize="7" fontWeight="bold">BOMBA CENTRAL</text>
           </g>
 

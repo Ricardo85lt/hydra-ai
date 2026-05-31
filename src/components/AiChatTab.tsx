@@ -141,7 +141,7 @@ export const AiChatTab: React.FC<AiChatTabProps> = ({
             </div>
             <div>
               <h4 className="text-sm font-semibold text-text-primary">Asistente Agronómico Virtual</h4>
-              <p className="text-[10px] text-accent-cyan font-mono font-medium">Conversación en línea · Modelo Gemini 3.5 Flash</p>
+              <p className="text-[10px] text-accent-cyan font-mono font-medium">Conversación en línea · Modelo Gemini 2.0 Flash</p>
             </div>
           </div>
           <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_#10b981] shrink-0" />
