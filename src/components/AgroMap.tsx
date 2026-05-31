@@ -188,7 +188,10 @@ export const AgroMap: React.FC<AgroMapProps> = ({ zones, startManualIrrigation, 
           {/* Markers */}
           <circle cx="270" cy="55" r="5" fill="#00ffd5" className="animate-pulse" />
           <circle cx="410" cy="185" r="5" fill="#00aaff" />
-          <circle cx="440" cy="65" r="5" fill="#ff4d6d" className="animate-ping" />
+          <g transform="translate(440, 65)">
+            <circle cx="0" cy="0" r="4" fill="#ff4d6d" />
+            <circle cx="0" cy="0" r="4" fill="#ff4d6d" className="animate-ping" />
+          </g>
           <circle cx="115" cy="165" r="5" fill="#00aaff" />
 
           {/* Compass */}
