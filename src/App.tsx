@@ -351,24 +351,23 @@ export default function App() {
         };
         setChatMessages(prev => [...prev, aiMsg]);
       } else {
-        let errorMsg = 'Error en el servidor de IA';
+        // Extraer el código de estado HTTP para decidir si usar fallback silencioso
+        const status = response.status;
         let detail = '';
         try {
           const errData = await response.json();
-          errorMsg = errData.error || errorMsg;
-          detail = errData.detail || '';
+          detail = errData.detail || errData.error || '';
         } catch {
           // No JSON body
         }
-        throw new Error(detail ? `${errorMsg} (${detail})` : errorMsg);
+        throw Object.assign(new Error(detail), { httpStatus: status });
       }
     } catch (err: any) {
       setTimeout(() => {
-        const errorDetail = err.message || 'Error de conexión con el servidor';
         const fallbackText = getFailsafeChatResponse(promptToSend);
         const aiMsg: ChatMessage = {
           sender: 'ai',
-          text: `⚠️ [MODO DE CONTINGENCIA - MOTOR LOCAL]\nMotivo: ${errorDetail}\n\n${fallbackText}`,
+          text: fallbackText,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         };
         setChatMessages(prev => [...prev, aiMsg]);

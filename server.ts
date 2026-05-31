@@ -5,7 +5,7 @@
  * HYDRA AI — Full-Stack Server (Express + Vite + Google GenAI SDK v2)
  * ─────────────────────────────────────────────────────────────────────
  * CORRECCIONES APLICADAS:
- *   1. Nombre de modelo corregido: 'gemini-2.0-flash' (era 'gemini-3.5-flash', inexistente)
+ *   1. Nombre de modelo corregido: 'gemini-2.0-flash-lite' (cuota free-tier más generosa)
  *   2. Constructor limpio: eliminado httpOptions.headers (campo no soportado en SDK v2)
  *   3. systemInstruction ubicado correctamente dentro de config{}
  *   4. /api/gemini/analyze ahora llama a checkAiClient() antes de usar el SDK
@@ -78,7 +78,7 @@ app.get('/api/health', (_req, res) => {
     status: 'ok',
     time: new Date().toISOString(),
     ai_configured: !!ai,
-    model: 'gemini-2.0-flash',
+    model: 'gemini-2.0-flash-lite',
     port: PORT,
   });
 });
@@ -114,7 +114,7 @@ app.post('/api/gemini/chat', async (req, res) => {
   // ── FIX 3: systemInstruction correctamente ubicado dentro de config{}
   try {
     const response = await ai!.models.generateContent({
-      model: 'gemini-2.0-flash',
+      model: 'gemini-2.0-flash-lite',
       contents: message,
       config: {
         systemInstruction:
@@ -283,7 +283,7 @@ app.post('/api/gemini/analyze', async (req, res) => {
       `No uses introducciones genéricas; ve directo a la decisión y su justificación.`;
 
     const geminiResponse = await ai.models.generateContent({
-      model: 'gemini-2.0-flash',
+      model: 'gemini-2.0-flash-lite',
       contents: analysisPrompt,
       config: {
         systemInstruction:
@@ -358,7 +358,7 @@ async function startServer() {
     console.log(`\n╔══════════════════════════════════════════════════╗`);
     console.log(`║  HYDRA AI Server — ${new Date().toISOString()}  ║`);
     console.log(`║  Listening on http://0.0.0.0:${PORT}               ║`);
-    console.log(`║  AI Engine: ${ai ? 'ONLINE (Gemini 2.0 Flash)' : 'OFFLINE (Fallback Local)'}`);
+    console.log(`║  AI Engine: ${ai ? 'ONLINE (Gemini 2.0 Flash Lite)' : 'OFFLINE (Fallback Local)'}`);
     console.log(`╚══════════════════════════════════════════════════╝\n`);
   });
 }
